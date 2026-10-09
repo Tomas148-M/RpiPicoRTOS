@@ -17,6 +17,9 @@
 __pycache__/
 *.py[cod]
 
+# Local Pico 2 W troubleshooting skill
+/skills/pico2w-zephyr-setup/SKILL.md
+
 # Local operating system files
 Thumbs.db
 .DS_Store
