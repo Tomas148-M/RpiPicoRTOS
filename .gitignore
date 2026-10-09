@@ -1,0 +1,22 @@
+# Local development environment and dependencies
+/rtos/
+/zephyrproject/
+/zephyr-sdk/
+/zephyr-sdk-*/
+
+# Zephyr build output
+/build/
+/build_*/
+/build-*/
+
+# Downloaded reference archive and SDK installer temporary directories
+/devicetree-specification-0.4.zip
+/tmp*/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local operating system files
+Thumbs.db
+.DS_Store

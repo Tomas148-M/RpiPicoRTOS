@@ -1,0 +1,54 @@
+diff --git a/drivers/gpio/gpio_cyw43.c b/drivers/gpio/gpio_cyw43.c
+index 3aa6701066d..30616222df2 100644
+--- a/drivers/gpio/gpio_cyw43.c
++++ b/drivers/gpio/gpio_cyw43.c
+@@ -18,7 +18,9 @@
+ #include <zephyr/drivers/gpio/gpio_utils.h>
+ #include <zephyr/kernel.h>
+ #include <zephyr/logging/log.h>
++#include <zephyr/sys/byteorder.h>
+ #include <whd.h>
++#include <whd_types_int.h>
+ 
+ LOG_MODULE_REGISTER(gpio_cyw43, CONFIG_GPIO_LOG_LEVEL);
+ 
+@@ -27,9 +29,6 @@ LOG_MODULE_REGISTER(gpio_cyw43, CONFIG_GPIO_LOG_LEVEL);
+ /* Provided by the AIROC WiFi driver */
+ extern whd_interface_t airoc_wifi_get_whd_interface(void);
+ 
+-/* WHD internal API for setting iovar values */
+-extern uint32_t whd_wifi_set_iovar_value(whd_interface_t ifp, const char *iovar, uint32_t value);
+-
+ struct gpio_cyw43_config {
+ 	struct gpio_driver_config common;
+ };
+@@ -44,17 +43,26 @@ static int gpio_cyw43_write_state(const struct device *dev)
+ {
+ 	struct gpio_cyw43_data *data = dev->data;
+ 	whd_interface_t ifp = airoc_wifi_get_whd_interface();
++	uint32_t payload[2];
++	const void *buffers[] = { payload };
++	const uint16_t lengths[] = { sizeof(payload) };
+ 	uint32_t ret;
+ 
+ 	if (ifp == NULL) {
+-		/* WiFi not initialized yet, state will be applied later */
+-		return 0;
++		return -ENODEV;
+ 	}
+ 
+ 	k_mutex_lock(&data->lock, K_FOREVER);
+-	ret = whd_wifi_set_iovar_value(ifp, "gpioout", data->pin_state);
++	/* gpioout requires two little-endian words: pin mask, then output values. */
++	payload[0] = sys_cpu_to_le32(BIT_MASK(CYW43_GPIO_PINS));
++	payload[1] = sys_cpu_to_le32(data->pin_state);
++	ret = whd_wifi_set_iovar_buffers(ifp, "gpioout", buffers, lengths, ARRAY_SIZE(buffers));
+ 	k_mutex_unlock(&data->lock);
+ 
++	if (ret != WHD_SUCCESS) {
++		LOG_ERR("CYW43 GPIO write failed: %u", ret);
++	}
++
+ 	return (ret == 0) ? 0 : -EIO;
+ }
+ 

@@ -1,0 +1,3 @@
+{
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build_pico2w/compile_commands.json"
+}
