@@ -1,38 +1,45 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/gpio.h>
+#include <zephyr/logging/log.h>
+#include <wifi_connection.h>
+#include "wifi_credentials.h"
 
-static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
+
+static void wifi_task(void *arg1, void *arg2, void *arg3)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    int ret = wifi_run(APP_WIFI_SSID, APP_WIFI_PASSWORD);
+    LOG_INF("Wi-Fi task finished (%d)", ret);
+}
+
+static void console_task(void *arg1, void *arg2, void *arg3)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    while (true)
+    {
+        LOG_INF(" Uptime %lld seconds",
+                (long long)(k_uptime_get() / 1000));
+        k_sleep(K_SECONDS(1));
+    }
+}
+
+/* Lower numeric priority runs first. Both tasks sleep or wait between work. */
+K_THREAD_DEFINE(wifi_task_id, 5200, wifi_task,
+                NULL, NULL, NULL, 5, 0, SYS_FOREVER_MS);
+K_THREAD_DEFINE(console_task_id, 1024, console_task,
+                NULL, NULL, NULL, 7, 0, SYS_FOREVER_MS);
 
 int main(void)
 {
-    int ret;
-
-    printk("Hello World from Zephyr on Raspberry Pi Pico 2 W!\n");
-
-    if (!device_is_ready(DEVICE_DT_GET(DT_PARENT(DT_NODELABEL(cyw43_gpio))))) {
-        printk("Wi-Fi chip initialization failed; onboard LED is unavailable\n");
-        return 0;
-    }
-
-    if (!gpio_is_ready_dt(&led)) {
-        printk("LED device is not ready\n");
-        return 0;
-    }
-
-    ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        printk("Failed to configure LED: %d\n", ret);
-        return 0;
-    }
-
-    printk("Onboard LED blinking: 500 ms on, 500 ms off\n");
-
-    while (1) {
-        ret = gpio_pin_toggle_dt(&led);
-        if (ret < 0) {
-            printk("Failed to toggle LED: %d\n", ret);
-            return 0;
-        }
-        k_msleep(500);
-    }
+    k_thread_name_set(wifi_task_id, "wifi");
+    k_thread_name_set(console_task_id, "console");
+    k_thread_start(wifi_task_id);
+    k_thread_start(console_task_id);
+    return 0;
 }

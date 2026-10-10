@@ -1,0 +1,130 @@
+{
+    "version":  "2.0.0",
+    "tasks":  [
+                  {
+                      "label":  "Compile Project",
+                      "type":  "shell",
+                      "command":  "${command:raspberry-pi-pico.getWestPath}",
+                      "args":  [
+                                   "build",
+                                   "-p",
+                                   "auto",
+                                   "-b",
+                                   "rpi_pico2/rp2350a/m33_0/w",
+                                   "-d",
+                                   "\"${workspaceFolder}/build\"",
+                                   "\"${workspaceFolder}\"",
+                                   "-D",
+                                   "ZEPHYR_TOOLCHAIN_VARIANT=zephyr",
+                                   "-D",
+                                   "ZEPHYR_SDK_INSTALL_DIR=${command:raspberry-pi-pico.getZephyrSDKPath}",
+                                   "-D",
+                                   "OPENOCD=${command:raspberry-pi-pico.getOpenOCDRoot}/openocd",
+                                   "-D",
+                                   "OPENOCD_DEFAULT_PATH=${command:raspberry-pi-pico.getOpenOCDRoot}/scripts"
+                               ],
+                      "group":  {
+                                    "kind":  "build",
+                                    "isDefault":  true
+                                },
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       },
+                      "problemMatcher":  "$gcc",
+                      "options":  {
+                                      "cwd":  "${command:raspberry-pi-pico.getZephyrWorkspacePath}",
+                                      "env":  {
+                                                  "PATH":  "${command:raspberry-pi-pico.getGitPath}:${env:PATH}:"
+                                              }
+                                  },
+                      "windows":  {
+                                      "options":  {
+                                                      "env":  {
+                                                                  "Path":  "${command:raspberry-pi-pico.getGitPath};${env:Path};"
+                                                              },
+                                                      "shell":  {
+                                                                    "executable":  "cmd.exe",
+                                                                    "args":  [
+                                                                                 "/d",
+                                                                                 "/c"
+                                                                             ]
+                                                                }
+                                                  }
+                                  }
+                  },
+                  {
+                      "label":  "Flash",
+                      "type":  "shell",
+                      "group":  {
+                                    "kind":  "build"
+                                },
+                      "command":  "\"${command:raspberry-pi-pico.getWestPath}\"",
+                      "args":  [
+                                   "flash",
+                                   "--build-dir",
+                                   "\"${workspaceFolder}/build\""
+                               ],
+                      "options":  {
+                                      "cwd":  "${command:raspberry-pi-pico.getZephyrWorkspacePath}"
+                                  }
+                  },
+                  {
+                      "label":  "Run Project",
+                      "type":  "shell",
+                      "command":  "\"${command:raspberry-pi-pico.getPicotoolPath}\"",
+                      "args":  [
+                                   "load",
+                                   "\"${workspaceFolder}/build/zephyr/zephyr.elf\"",
+                                   "-fx"
+                               ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       },
+                      "problemMatcher":  [
+
+                                         ],
+                      "dependsOrder":  "sequence",
+                      "dependsOn":  "Compile Project",
+                      "options": {
+                          "cwd": "${workspaceFolder}"
+                      }
+                  },
+                  {
+                      "label":  "Build WiFi",
+                      "dependsOn":  "Compile Project",
+                      "dependsOrder":  "sequence",
+                      "problemMatcher":  [
+
+                                         ]
+                  },
+                  {
+                      "label":  "Run WiFi",
+                      "type":  "process",
+                      "command":  "${command:raspberry-pi-pico.getOpenOCDRoot}/openocd",
+                      "args":  [
+                                   "-s",
+                                   "${command:raspberry-pi-pico.getOpenOCDRoot}/scripts",
+                                   "-f",
+                                   "interface/cmsis-dap.cfg",
+                                   "-c",
+                                   "set USE_CORE cm0",
+                                   "-f",
+                                   "target/rp2350.cfg",
+                                   "-c",
+                                   "adapter speed 5000",
+                                   "-c",
+                                   "program \"${workspaceFolder}/build/zephyr/zephyr.elf\" verify reset exit"
+                               ],
+                      "dependsOn":  "Build WiFi",
+                      "dependsOrder":  "sequence",
+                      "options": {
+                          "cwd": "${workspaceFolder}"
+                      },
+                      "problemMatcher":  [
+
+                                         ]
+                  }
+              ]
+}
