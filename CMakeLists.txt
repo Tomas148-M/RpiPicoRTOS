@@ -16,3 +16,4 @@ project(Rpi_Zephyr LANGUAGES C)
 
 target_sources(app PRIVATE src/main.c)
 add_subdirectory(lib/wifi)
+add_subdirectory(lib/wifi_api)

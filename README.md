@@ -32,3 +32,47 @@ For a new Zephyr workspace, run `west blobs fetch hal_infineon` once to obtain
 the CYW43439 firmware. The `/w` board supplies the Wi-Fi devicetree and driver;
 no application overlay is needed. Set `CONFIG_WHD_WIFI_COUNTRY` in `prj.conf`
 to the appropriate driver country constant for your deployment if needed.
+
+## Wi-Fi HTTP API server
+
+The reusable `lib/wifi_api` library exposes `wifi_api_server_run(port, routes,
+route_count)` through `wifi_api_server.h`. The application starts it in the
+`wifi_api` thread (priority 6, 4096-byte stack), listening on IPv4 port 8080.
+It becomes reachable once Wi-Fi has a DHCP address; the Wi-Fi reconnection
+thread continues running independently. Listener failures retry after 10 seconds.
+
+Using the address printed on the UART console, try:
+
+```powershell
+curl.exe http://192.168.1.100:8080/api/health
+# {"status":"ok"}
+curl.exe http://192.168.1.100:8080/api/uptime
+# {"uptime_seconds":123}
+curl.exe http://192.168.1.100:8080/api/temperature
+# {"temperature_celsius":32.125}
+```
+
+`/api/temperature` takes a fresh reading from the internal RP2350 temperature
+sensor for each request and returns Celsius as a JSON number. It measures the
+CPU die temperature, rather than ambient air temperature. The three decimal
+places describe the response format, not sensor accuracy. If the sensor is
+unavailable or reading fails, the server returns HTTP 500 with
+`{"error":"handler failed"}` and logs the cause on the console.
+
+Replace the example IP with your Pico's address. Add entries to `api_routes`
+in `src/main.c` to expose more GET endpoints. Each handler receives a response
+buffer, its capacity, and the route's `user_data`; write JSON and return the
+byte count excluding the terminating NUL. Negative results or results exceeding
+the buffer produce HTTP 500. Route storage must outlive the server call.
+
+The server handles one client at a time, closes each connection after its
+response, limits request headers to 1023 bytes and JSON responses to 511 bytes,
+and applies a five-second header deadline and socket I/O timeouts. Query strings
+are ignored for route matching. Unknown routes return 404, unsupported methods
+return 405 with `Allow: GET`, and oversized headers return 431.
+It does not support request bodies, streaming, TLS, or authentication; use it
+on a trusted local network. `/api/health` reports that the API is responding.
+
+After building and flashing, verify the three endpoints above, an unknown path
+(404), and `curl.exe -X POST http://<pico-ip>:8080/api/health` (405). Disconnect
+and reconnect Wi-Fi and repeat the health request to check recovery on hardware.

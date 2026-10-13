@@ -1,9 +1,13 @@
 #ifndef WIFI_CONNECTION_H
 #define WIFI_CONNECTION_H
 
-/* Run the WPA2/DHCP connection and reconnection loop in the calling thread.
- * Blocks while configured; call once. Strings must remain valid for this call.
- * An empty SSID disables Wi-Fi connection attempts.
+/**
+ * @brief Manage the WPA2 connection, DHCP, and reconnection after a disconnect.
+ * @param ssid Network name containing 1 to 32 bytes; an empty string disables connection attempts.
+ * @param password WPA2 passphrase containing 8 to 63 bytes.
+ * @return -EINVAL for a NULL argument; 0 for invalid credentials or a missing interface.
+ * @note Call only once in a dedicated thread. Blocks with a valid configuration;
+ *       both strings must remain valid for the entire call.
  */
 int wifi_run(const char *ssid, const char *password);
 

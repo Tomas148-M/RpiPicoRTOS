@@ -1,0 +1,5 @@
+add_library(app_wifi_api STATIC wifi_api_server.c)
+target_include_directories(app_wifi_api PUBLIC include)
+target_link_libraries(app_wifi_api PUBLIC zephyr_interface)
+add_dependencies(app_wifi_api zephyr_generated_headers)
+target_link_libraries(app PRIVATE app_wifi_api)

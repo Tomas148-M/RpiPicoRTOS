@@ -15,6 +15,12 @@ static struct net_mgmt_event_callback wifi_cb, ipv4_cb;
 static atomic_t connected;
 K_SEM_DEFINE(connection_changed, 0, 1);
 
+/**
+ * @brief Update Wi-Fi connection state and wake the thread waiting for a state change.
+ * @param cb Callback containing the connection result.
+ * @param event Connection or disconnection event type.
+ * @param iface Interface that raised the event; events from other interfaces are ignored.
+ */
 static void wifi_event(struct net_mgmt_event_callback *cb, uint64_t event,
                        struct net_if *iface)
 {
@@ -39,6 +45,12 @@ static void wifi_event(struct net_mgmt_event_callback *cb, uint64_t event,
     k_sem_give(&connection_changed);
 }
 
+/**
+ * @brief Log the Wi-Fi interface IPv4 address after DHCP assigns it.
+ * @param cb Unused callback context.
+ * @param event Network event type; only DHCP address assignment is handled.
+ * @param iface Interface that raised the event.
+ */
 static void ipv4_event(struct net_mgmt_event_callback *cb, uint64_t event,
                        struct net_if *iface)
 {
@@ -52,6 +64,13 @@ static void ipv4_event(struct net_mgmt_event_callback *cb, uint64_t event,
     }
 }
 
+/**
+ * @brief Start DHCP and maintain the Wi-Fi connection, retrying after 10 seconds.
+ * @param ssid Network name containing 1 to 32 bytes.
+ * @param password WPA2 passphrase containing 8 to 63 bytes.
+ * @return -EINVAL for a NULL argument; 0 for invalid credentials or a missing interface.
+ * @note With a valid configuration, blocks the calling thread in an infinite loop.
+ */
 int wifi_run(const char *ssid, const char *password)
 {
     if (!ssid || !password) { return -EINVAL; }
