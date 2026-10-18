@@ -1,5 +1,4 @@
-#ifndef WIFI_API_SERVER_H
-#define WIFI_API_SERVER_H
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -14,16 +13,16 @@ extern "C" {
  * @brief Route handler type that writes a JSON response into the output buffer.
  * @param body Output buffer for null-terminated JSON.
  * @param capacity Buffer capacity in bytes, including the null terminator.
- * @param user_data Context passed from the corresponding wifi_api_route entry.
+ * @param user_data Context passed from the corresponding WifiApiRoute entry.
  * @return JSON length excluding the null terminator, or a negative error code.
  * @note Handlers run sequentially in the server thread. An error or a length reaching
  *       the buffer capacity produces HTTP 500; success produces HTTP 200.
  */
-typedef int (*wifi_api_handler_t)(char *body, size_t capacity, void *user_data);
+typedef int (*WifiApiHandler)(char *body, size_t capacity, void *user_data);
 
-struct wifi_api_route {
+struct WifiApiRoute {
     const char *path;
-    wifi_api_handler_t handler;
+    WifiApiHandler handler;
     void *user_data;
 };
 
@@ -37,10 +36,9 @@ struct wifi_api_route {
  *       using bounded buffers and a 5-second deadline for reading request headers.
  *       Closes the connection after responding. HTTP without authentication is intended for a trusted local network.
  */
-int wifi_api_server_run(uint16_t port, const struct wifi_api_route *routes,
+int wifi_api_server_run(uint16_t port, const struct WifiApiRoute *routes,
                         size_t route_count);
 
 #ifdef __cplusplus
 }
-#endif
 #endif

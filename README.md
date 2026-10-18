@@ -59,7 +59,7 @@ places describe the response format, not sensor accuracy. If the sensor is
 unavailable or reading fails, the server returns HTTP 500 with
 `{"error":"handler failed"}` and logs the cause on the console.
 
-Replace the example IP with your Pico's address. Add entries to `api_routes`
+Replace the example IP with your Pico's address. Add entries to `API_ROUTES`
 in `src/main.c` to expose more GET endpoints. Each handler receives a response
 buffer, its capacity, and the route's `user_data`; write JSON and return the
 byte count excluding the terminating NUL. Negative results or results exceeding

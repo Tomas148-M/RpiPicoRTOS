@@ -1,5 +1,4 @@
-#ifndef WIFI_CONNECTION_H
-#define WIFI_CONNECTION_H
+#pragma once
 
 /**
  * @brief Manage the WPA2 connection, DHCP, and reconnection after a disconnect.
@@ -10,5 +9,3 @@
  *       both strings must remain valid for the entire call.
  */
 int wifi_run(const char *ssid, const char *password);
-
-#endif

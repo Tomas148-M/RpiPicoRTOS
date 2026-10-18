@@ -77,7 +77,7 @@ static int temperature_handler(char *body, size_t capacity, void *user_data)
                     (long long)(milli_celsius % 1000));
 }
 
-static const struct wifi_api_route api_routes[] = {
+static const struct WifiApiRoute API_ROUTES[] = {
     { .path = "/api/health", .handler = health_handler },
     { .path = "/api/uptime", .handler = uptime_handler },
     { .path = "/api/temperature", .handler = temperature_handler },
@@ -96,7 +96,7 @@ static void api_task(void *arg1, void *arg2, void *arg3)
     ARG_UNUSED(arg2);
     ARG_UNUSED(arg3);
     while (true) {
-        int ret = wifi_api_server_run(8080, api_routes, ARRAY_SIZE(api_routes));
+        int ret = wifi_api_server_run(8080, API_ROUTES, ARRAY_SIZE(API_ROUTES));
         LOG_ERR("API server stopped (%d); retrying in 10 seconds", ret);
         k_sleep(K_SECONDS(10));
     }
@@ -131,8 +131,7 @@ static void console_task(void *arg1, void *arg2, void *arg3)
     ARG_UNUSED(arg2);
     ARG_UNUSED(arg3);
 
-    while (true)
-    {
+    while (true) {
         LOG_INF(" Uptime %lld seconds",
                 (long long)(k_uptime_get() / 1000));
         k_sleep(K_SECONDS(1));

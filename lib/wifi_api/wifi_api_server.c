@@ -17,15 +17,12 @@ LOG_MODULE_REGISTER(wifi_api, CONFIG_LOG_DEFAULT_LEVEL);
  */
 static int send_all(int client, const char *data, size_t length)
 {
-    while (length)
-    {
+    while (length) {
         int sent = zsock_send(client, data, length, 0);
-        if (sent < 0 && errno == EINTR)
-        {
+        if (sent < 0 && errno == EINTR) {
             continue;
         }
-        if (sent <= 0)
-        {
+        if (sent <= 0) {
             return -EIO;
         }
         data += sent;
@@ -54,8 +51,7 @@ static void respond(int client, int status, const char *reason,
                         status, reason, length,
                         status == 405 ? "Allow: GET\r\n" : "");
     if (size > 0 && (size_t)size < sizeof(header) &&
-        send_all(client, header, (size_t)size) == 0)
-    {
+        send_all(client, header, (size_t)size) == 0) {
         (void)send_all(client, body, length);
     }
 }
@@ -70,7 +66,7 @@ static void respond(int client, int status, const char *reason,
  * @param count Number of entries in the table.
  * @note Wait up to 5 seconds for request headers and send an HTTP error for invalid requests.
  */
-static void serve_client(int client, const struct wifi_api_route *routes,
+static void serve_client(int client, const struct WifiApiRoute *routes,
                          size_t count)
 {
     char request[1024];
@@ -78,40 +74,33 @@ static void serve_client(int client, const struct wifi_api_route *routes,
     int64_t deadline = k_uptime_get() + 5000;
 
     request[0] = '\0';
-    while (!strstr(request, "\r\n\r\n"))
-    {
+    while (!strstr(request, "\r\n\r\n")) {
         int64_t remaining = deadline - k_uptime_get();
-        if (remaining <= 0)
-        {
+        if (remaining <= 0) {
             ERROR_RESPONSE(408, "Request Timeout", "{\"error\":\"timeout\"}");
             return;
         }
         struct zsock_pollfd fd = {.fd = client, .events = ZSOCK_POLLIN};
         int ready = zsock_poll(&fd, 1, (int)remaining);
-        if (ready < 0 && errno == EINTR)
-        {
+        if (ready < 0 && errno == EINTR) {
             continue;
         }
-        if (ready <= 0)
-        {
+        if (ready <= 0) {
             ERROR_RESPONSE(408, "Request Timeout", "{\"error\":\"timeout\"}");
             return;
         }
         int received = zsock_recv(client, request + used,
                                   sizeof(request) - used - 1, 0);
-        if (received <= 0)
-        {
+        if (received <= 0) {
             return;
         }
-        if (memchr(request + used, '\0', (size_t)received))
-        {
+        if (memchr(request + used, '\0', (size_t)received)) {
             ERROR_RESPONSE(400, "Bad Request", "{\"error\":\"bad request\"}");
             return;
         }
         used += received;
         request[used] = '\0';
-        if (used == sizeof(request) - 1 && !strstr(request, "\r\n\r\n"))
-        {
+        if (used == sizeof(request) - 1 && !strstr(request, "\r\n\r\n")) {
             ERROR_RESPONSE(431, "Request Header Fields Too Large",
                            "{\"error\":\"headers too large\"}");
             return;
@@ -121,47 +110,37 @@ static void serve_client(int client, const struct wifi_api_route *routes,
     char *line_end = strstr(request, "\r\n");
     *line_end = '\0';
     char *path = strchr(request, ' ');
-    if (!path)
-    {
+    if (!path) {
         ERROR_RESPONSE(400, "Bad Request", "{\"error\":\"bad request\"}");
         return;
     }
     *path++ = '\0';
     char *version = strchr(path, ' ');
-    if (!version || path[0] != '/')
-    {
+    if (!version || path[0] != '/') {
         ERROR_RESPONSE(400, "Bad Request", "{\"error\":\"bad request\"}");
         return;
     }
     *version++ = '\0';
-    if (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0"))
-    {
+    if (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0")) {
         ERROR_RESPONSE(400, "Bad Request", "{\"error\":\"bad version\"}");
         return;
     }
-    if (strcmp(request, "GET"))
-    {
+    if (strcmp(request, "GET")) {
         ERROR_RESPONSE(405, "Method Not Allowed", "{\"error\":\"GET required\"}");
         return;
     }
     char *query = strchr(path, '?');
-    if (query)
-    {
+    if (query) {
         *query = '\0';
     }
-    for (size_t i = 0; i < count; ++i)
-    {
-        if (!strcmp(path, routes[i].path))
-        {
+    for (size_t i = 0; i < count; ++i) {
+        if (!strcmp(path, routes[i].path)) {
             char body[WIFI_API_RESPONSE_SIZE];
             int length = routes[i].handler(body, sizeof(body), routes[i].user_data);
-            if (length < 0 || (size_t)length >= sizeof(body))
-            {
+            if (length < 0 || (size_t)length >= sizeof(body)) {
                 ERROR_RESPONSE(500, "Internal Server Error",
                                "{\"error\":\"handler failed\"}");
-            }
-            else
-            {
+            } else {
                 respond(client, 200, "OK", body, (size_t)length);
             }
             return;
@@ -178,23 +157,19 @@ static void serve_client(int client, const struct wifi_api_route *routes,
  * @return Negative errno code for invalid configuration or a listener socket failure.
  * @note Run in a dedicated thread; each client connection is closed after handling.
  */
-int wifi_api_server_run(uint16_t port, const struct wifi_api_route *routes,
+int wifi_api_server_run(uint16_t port, const struct WifiApiRoute *routes,
                         size_t route_count)
 {
-    if (!port || !routes || !route_count)
-    {
+    if (!port || !routes || !route_count) {
         return -EINVAL;
     }
-    for (size_t i = 0; i < route_count; ++i)
-    {
-        if (!routes[i].path || routes[i].path[0] != '/' || !routes[i].handler)
-        {
+    for (size_t i = 0; i < route_count; ++i) {
+        if (!routes[i].path || routes[i].path[0] != '/' || !routes[i].handler) {
             return -EINVAL;
         }
     }
     int listener = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listener < 0)
-    {
+    if (listener < 0) {
         return -errno;
     }
     struct sockaddr_in address = {
@@ -205,20 +180,16 @@ int wifi_api_server_run(uint16_t port, const struct wifi_api_route *routes,
     int reuse = 1;
     (void)zsock_setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     if (zsock_bind(listener, (struct sockaddr *)&address, sizeof(address)) < 0 ||
-        zsock_listen(listener, 2) < 0)
-    {
+        zsock_listen(listener, 2) < 0) {
         int error = -errno;
         zsock_close(listener);
         return error;
     }
     LOG_INF("HTTP API listening on port %u", port);
-    while (true)
-    {
+    while (true) {
         int client = zsock_accept(listener, NULL, NULL);
-        if (client < 0)
-        {
-            if (errno == EINTR)
-            {
+        if (client < 0) {
+            if (errno == EINTR) {
                 continue;
             }
             int error = -errno;
@@ -227,15 +198,13 @@ int wifi_api_server_run(uint16_t port, const struct wifi_api_route *routes,
         }
         struct zsock_timeval timeout = {.tv_sec = 5};
         if (zsock_setsockopt(client, SOL_SOCKET, SO_SNDTIMEO,
-                             &timeout, sizeof(timeout)) < 0)
-        {
+                             &timeout, sizeof(timeout)) < 0) {
             LOG_ERR("Failed to set send timeout: errno=%d", errno);
             zsock_close(client);
             continue;
         }
         if (zsock_setsockopt(client, SOL_SOCKET, SO_RCVTIMEO,
-                             &timeout, sizeof(timeout)) < 0)
-        {
+                             &timeout, sizeof(timeout)) < 0) {
             LOG_ERR("Failed to set receive timeout: errno=%d", errno);
             zsock_close(client);
             continue;

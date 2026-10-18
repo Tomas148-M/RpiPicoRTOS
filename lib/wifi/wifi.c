@@ -73,7 +73,9 @@ static void ipv4_event(struct net_mgmt_event_callback *cb, uint64_t event,
  */
 int wifi_run(const char *ssid, const char *password)
 {
-    if (!ssid || !password) { return -EINVAL; }
+    if (!ssid || !password) {
+        return -EINVAL;
+    }
     struct wifi_connect_req_params params = {
         .ssid = (const uint8_t *)ssid,
         .ssid_length = strlen(ssid),
@@ -129,4 +131,3 @@ int wifi_run(const char *ssid, const char *password)
     }
     return 0;
 }
-
