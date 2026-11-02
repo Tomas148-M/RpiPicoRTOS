@@ -60,7 +60,9 @@ jobs:
           # Install extension dependencies before loading any Zephyr commands.
           python -m pip install -r zephyr/scripts/requirements-base.txt
           west zephyr-export
-          west blobs fetch hal_infineon
+          # Pico 2 W needs CYW43439 Wi-Fi blobs, not other boards' flash loaders.
+          west blobs fetch hal_infineon \
+            --allow-regex '^img/whd/resources/(firmware|clm)/COMPONENT_43439/'
           west sdk install --version "$ZEPHYR_SDK_VERSION" \
             --gnu-toolchains arm-zephyr-eabi
           echo "ZEPHYR_BASE=$PWD/zephyr" >> "$GITHUB_ENV"
