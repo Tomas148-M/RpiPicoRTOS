@@ -57,8 +57,9 @@ jobs:
           cd zephyr-workspace
           west init -l zephyr
           west update --narrow -o=--depth=1
-          west zephyr-export
+          # Install extension dependencies before loading any Zephyr commands.
           python -m pip install -r zephyr/scripts/requirements-base.txt
+          west zephyr-export
           west blobs fetch hal_infineon
           west sdk install --version "$ZEPHYR_SDK_VERSION" \
             --gnu-toolchains arm-zephyr-eabi
