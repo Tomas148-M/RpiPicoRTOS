@@ -1,5 +1,70 @@
 # Pico 2 W Wi-Fi
 
+## MPU6050 motion sensor
+
+`lib/mpu6050` wraps Zephyr's MPU6050 driver. Include `mpu6050.h` and call
+`app_mpu6050_init()` to check readiness, then `app_mpu6050_read()` from a thread.
+Zephyr performs hardware initialization at boot. Reads are serialized by a
+mutex and leave the output unchanged on failure; use this library exclusively
+when accessing this sensor. Errors are negative errno values (`-EINVAL` for
+a null output, `-ENODEV` for an unavailable device, or a driver error).
+
+Wire SDA to **GP4** (physical pin 6), SCL to **GP5** (pin 7), GND to GND,
+and use a module compatible with **3.3 V power and I/O**. SDA/SCL need pull-ups
+to 3.3 V (usually provided on the module). Tie AD0 low for address `0x68`.
+INT is unused. `app.overlay` configures I2C0 with ranges of +/-2 g and
++/-250 degrees/s. For AD0 high, change both `mpu6050@68` and `reg` to `69`
+and `0x69`. Configuration is based on the
+[Zephyr MPU6050 binding](https://docs.zephyrproject.org/latest/build/dts/api/bindings/sensor/invensense%2Cmpu6050.html).
+
+Example inside an application thread (add `#include <mpu6050.h>`):
+
+```c
+Mpu6050Sample sample;
+int ret = app_mpu6050_init();
+if (ret == 0) {
+    ret = app_mpu6050_read(&sample);
+}
+if (ret == 0) {
+    int64_t acceleration_z_micro = sensor_value_to_micro(&sample.acceleration[2]);
+    int64_t gyro_z_micro = sensor_value_to_micro(&sample.angular_velocity[2]);
+    int64_t temperature_milli = sensor_value_to_milli(&sample.temperature);
+    /* Use values in micro m/s^2, micro rad/s and milli degrees Celsius. */
+    ARG_UNUSED(acceleration_z_micro);
+    ARG_UNUSED(gyro_z_micro);
+    ARG_UNUSED(temperature_milli);
+}
+```
+
+The sample stores X/Y/Z acceleration in m/s^2, angular velocity in rad/s,
+and sensor die temperature in Celsius as `struct sensor_value` fixed-point
+values. No floating-point printf is required. The library does not estimate
+orientation or calibrate bias. The existing HTTP endpoints are unchanged.
+
+Build using **Compile Project**. If an existing build predates `app.overlay`,
+perform a pristine build (`west build -p always` with the board and paths
+described below). On hardware, check that readiness succeeds, a stationary
+sensor measures approximately 9.81 m/s^2 along gravity and near-zero angular
+velocity, and rotation changes the corresponding gyro axis. Disconnect the
+sensor to verify error handling; reconnect and reboot if boot initialization
+failed. These physical checks require a connected MPU6050.
+
+## Continuous integration
+
+[The GitHub Actions workflow](.github/workflows/firmware.yml) builds the Pico 2 W
+firmware on pushes, pull requests, and manual runs from the **Actions** tab.
+It pins Zephyr to revision `a915b2f12675b48b16d56653ea145dcd8f20cbbf`
+and uses Zephyr SDK 1.0.1. Update the workflow pins deliberately when upgrading
+the local toolchain.
+
+CI creates its own `src/wifi_env.h` with empty credentials; no secrets are needed.
+Downloaded CI firmware therefore has Wi-Fi connection attempts disabled. A
+successful run provides the ELF, UF2, and BIN files as an artifact retained for
+14 days. CI checks compilation; device and Wi-Fi checks still require hardware.
+Formatting hooks described in `doc/contributing.md` are not yet configured in CI.
+
+## Local development
+
 Targets `rpi_pico2/rp2350a/m33_0/w` with Zephyr SDK 1.0.1.
 
 Wi-Fi lives in the Zephyr library `lib/wifi`, with public header

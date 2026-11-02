@@ -1,0 +1,5 @@
+add_library(app_mpu6050 STATIC mpu6050.c)
+target_include_directories(app_mpu6050 PUBLIC include)
+target_link_libraries(app_mpu6050 PUBLIC zephyr_interface)
+add_dependencies(app_mpu6050 zephyr_generated_headers)
+target_link_libraries(app PRIVATE app_mpu6050)

@@ -1,0 +1,18 @@
+/ {
+    aliases {
+        mpu6050 = &imu;
+    };
+};
+
+/* Pico 2 W board defaults: SDA GP4, SCL GP5. */
+&i2c0 {
+    status = "okay";
+
+    imu: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+        accel-fs = <2>;
+        gyro-fs = <250>;
+        status = "okay";
+    };
+};
