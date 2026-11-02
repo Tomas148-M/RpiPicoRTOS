@@ -47,9 +47,15 @@ jobs:
       - name: Prepare Zephyr workspace
         working-directory: ${{ runner.temp }}
         run: |
-          west init -m https://github.com/zephyrproject-rtos/zephyr \
-            --mr "$ZEPHYR_REVISION" zephyr-workspace
+          # west 1.5.0 --mr uses git clone --branch, which cannot take a SHA.
+          git init zephyr-workspace/zephyr
+          git -C zephyr-workspace/zephyr remote add origin \
+            https://github.com/zephyrproject-rtos/zephyr
+          git -C zephyr-workspace/zephyr fetch --depth=1 origin "$ZEPHYR_REVISION"
+          git -C zephyr-workspace/zephyr checkout --detach FETCH_HEAD
+          test "$(git -C zephyr-workspace/zephyr rev-parse HEAD)" = "$ZEPHYR_REVISION"
           cd zephyr-workspace
+          west init -l zephyr
           west update --narrow -o=--depth=1
           west zephyr-export
           python -m pip install -r zephyr/scripts/requirements-base.txt

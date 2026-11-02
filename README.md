@@ -49,13 +49,74 @@ velocity, and rotation changes the corresponding gyro axis. Disconnect the
 sensor to verify error handling; reconnect and reboot if boot initialization
 failed. These physical checks require a connected MPU6050.
 
+## Rotating acceleration and angular velocity
+
+`lib/imu_rotation` is a separate, hardware-independent C library. It rotates
+both XYZ vectors by known angles, preserving units and vector lengths (within
+floating-point rounding). Prepare an `ImuRotation` once, then reuse it for each
+sample. Angles are **radians** and follow the right-hand rule. The convention
+is `output = Rz(yaw) * Ry(pitch) * Rx(roll) * input`: fixed X, then Y, then Z
+rotations from sensor coordinates into the desired output coordinates.
+A +90 degree yaw maps sensor +X to output +Y and +Y to -X.
+
+Example in a thread, after checking `app_mpu6050_init()` succeeds:
+
+```c
+#include <mpu6050.h>
+#include <imu_rotation.h>
+
+/* Inside a function: a known +90 degree rotation around Z. */
+ImuRotation rotation;
+Mpu6050Sample sample;
+ImuMotion input;
+ImuMotion rotated;
+int ret = imu_rotation_init(&rotation, 0.0f, 0.0f, 1.57079632679f);
+if (ret == 0) {
+    ret = app_mpu6050_read(&sample);
+}
+if (ret == 0) {
+    for (int axis = 0; axis < 3; ++axis) {
+        input.acceleration[axis] = (float)sensor_value_to_double(&sample.acceleration[axis]);
+        input.angular_velocity[axis] = (float)sensor_value_to_double(&sample.angular_velocity[axis]);
+    }
+    ret = imu_rotation_apply(&rotation, &input, &rotated);
+}
+if (ret == 0) {
+    /* rotated.acceleration: m/s^2; rotated.angular_velocity: rad/s. */
+}
+```
+
+Use `radians = degrees * 0.01745329252f` when starting with degrees.
+Choose angles describing the sensor-to-output transformation. To undo a
+combined rotation, use the transpose of its matrix; negating all three Euler
+angles in the same order does not generally produce the inverse.
+
+`imu_rotation_apply()` supports using the same input and output pointer.
+It returns `-EINVAL` for null pointers or nonfinite values and `-ERANGE` for
+overflow; output remains unchanged on error. Share an initialized matrix
+between threads only while it remains immutable. The library uses single
+precision math, keeps gravity in the acceleration, and performs no orientation
+estimation, integration or calibration. Temperature is not rotated.
+
+Standalone math tests need a host C compiler and do not require hardware or
+Zephyr. From a compiler-enabled terminal (e.g. Visual Studio Developer Command
+Prompt), run:
+
+```text
+cmake -S tests/imu_rotation -B build/imu_rotation_tests
+cmake --build build/imu_rotation_tests --config Debug
+ctest --test-dir build/imu_rotation_tests -C Debug --output-on-failure
+```
+
 ## Continuous integration
 
 [The GitHub Actions workflow](.github/workflows/firmware.yml) builds the Pico 2 W
 firmware on pushes, pull requests, and manual runs from the **Actions** tab.
 It pins Zephyr to revision `a915b2f12675b48b16d56653ea145dcd8f20cbbf`
 and uses Zephyr SDK 1.0.1. Update the workflow pins deliberately when upgrading
-the local toolchain.
+the local toolchain. CI fetches that exact commit with Git and then runs
+`west init -l zephyr`; west 1.5.0's remote `--mr` option accepts branch or tag
+names and cannot initialize directly from a commit SHA.
 
 CI creates its own `src/wifi_env.h` with empty credentials; no secrets are needed.
 Downloaded CI firmware therefore has Wi-Fi connection attempts disabled. A
