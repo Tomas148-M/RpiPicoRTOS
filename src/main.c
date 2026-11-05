@@ -4,11 +4,18 @@
 #include <zephyr/logging/log.h>
 #include <wifi_connection.h>
 #include <wifi_api_server.h>
+#include <mpu6050.h>
+#include <mpu6050_rotation.h>
+#include <imu_orientation.h>
+#include <math.h>
 #include <stdio.h>
 #include <errno.h>
 #include "wifi_credentials.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
+
+/* Sensor-to-output mounting rotation, in degrees around fixed X, Y, then Z. */
+static const float MOTION_ROTATION_DEGREES[3] = {0.0f, 0.0f, 0.0f};
 
 /**
  * @brief Write a JSON response confirming API availability.
@@ -138,16 +145,83 @@ static void console_task(void *arg1, void *arg2, void *arg3)
     }
 }
 
-/* Lower numeric priority runs first. Both tasks sleep or wait between work. */
+/** @brief Estimate and log X/Y/Z orientation in degrees at 10 Hz. */
+static void motion_task(void *arg1, void *arg2, void *arg3)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    ImuRotation rotation;
+    const float radians_per_degree = 0.01745329252f;
+    int ret = imu_rotation_init(&rotation,
+                                MOTION_ROTATION_DEGREES[0] * radians_per_degree,
+                                MOTION_ROTATION_DEGREES[1] * radians_per_degree,
+                                MOTION_ROTATION_DEGREES[2] * radians_per_degree);
+    if (ret < 0) {
+        LOG_ERR("Invalid motion rotation (%d)", ret);
+        return;
+    }
+    ret = app_mpu6050_init();
+    if (ret < 0) {
+        LOG_ERR("MPU6050 unavailable (%d); check wiring and reboot", ret);
+        return;
+    }
+
+    ImuOrientation orientation = {0};
+    int64_t previous_ms = 0;
+    while (true) {
+        Mpu6050Sample sample;
+        ret = app_mpu6050_read(&sample);
+        if (ret == 0) {
+            ret = mpu6050_rotation_apply(&rotation, &sample, &sample);
+        }
+        if (ret < 0) {
+            LOG_ERR("MPU6050 read/rotation failed (%d)", ret);
+            k_sleep(K_SECONDS(1));
+            continue;
+        }
+
+        int64_t now_ms = k_uptime_get();
+        float dt = previous_ms == 0 ? 0.1f : (now_ms - previous_ms) / 1000.0f;
+        previous_ms = now_ms;
+        if (dt <= 0.0f || dt > 0.5f) {
+            /* Do not integrate a stale sample across a read failure/debug pause. */
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        ImuMotion motion;
+        for (int axis = 0; axis < 3; ++axis) {
+            motion.acceleration[axis] =
+                (float)sensor_value_to_double(&sample.acceleration[axis]);
+            motion.angular_velocity[axis] =
+                (float)sensor_value_to_double(&sample.angular_velocity[axis]);
+        }
+        float degrees[3];
+        ret = imu_orientation_update(&orientation, &motion, dt, degrees);
+        if (ret == 0) {
+            LOG_INF("X: %d, Y: %d, Z: %d [deg]",
+                    (int)lroundf(degrees[0]), (int)lroundf(degrees[1]),
+                    (int)lroundf(degrees[2]));
+        } else {
+            LOG_WRN("Orientation unavailable (%d); keep sensor still", ret);
+        }
+        k_sleep(K_MSEC(100));
+    }
+}
+
+/* Lower numeric priority runs first. Tasks sleep or wait between work. */
 K_THREAD_DEFINE(wifi_task_id, 5200, wifi_task,
                 NULL, NULL, NULL, 5, 0, SYS_FOREVER_MS);
 K_THREAD_DEFINE(console_task_id, 1024, console_task,
                 NULL, NULL, NULL, 7, 0, SYS_FOREVER_MS);
 K_THREAD_DEFINE(api_task_id, 4096, api_task,
                 NULL, NULL, NULL, 6, 0, SYS_FOREVER_MS);
+K_THREAD_DEFINE(motion_task_id, 2048, motion_task,
+                NULL, NULL, NULL, 7, 0, SYS_FOREVER_MS);
 
 /**
- * @brief Name and start the Wi-Fi, console, and HTTP API threads.
+ * @brief Name and start the Wi-Fi, console, HTTP API, and motion threads.
  * @return Always 0 after starting the threads.
  */
 int main(void)
@@ -155,8 +229,10 @@ int main(void)
     k_thread_name_set(wifi_task_id, "wifi");
     k_thread_name_set(console_task_id, "console");
     k_thread_name_set(api_task_id, "wifi_api");
+    k_thread_name_set(motion_task_id, "motion");
     k_thread_start(wifi_task_id);
     k_thread_start(console_task_id);
     k_thread_start(api_task_id);
+    k_thread_start(motion_task_id);
     return 0;
 }

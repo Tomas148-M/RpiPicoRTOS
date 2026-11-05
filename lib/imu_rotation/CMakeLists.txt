@@ -1,0 +1,5 @@
+add_library(app_imu_rotation STATIC imu_rotation.c mpu6050_rotation.c imu_orientation.c)
+target_include_directories(app_imu_rotation PUBLIC include)
+target_link_libraries(app_imu_rotation PUBLIC zephyr_interface app_mpu6050 m)
+add_dependencies(app_imu_rotation zephyr_generated_headers)
+target_link_libraries(app PRIVATE app_imu_rotation)

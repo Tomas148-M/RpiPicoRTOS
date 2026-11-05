@@ -2,6 +2,19 @@
 
 ## MPU6050 motion sensor
 
+The `motion` thread reads acceleration and gyroscope XYZ every 100 ms and
+logs only estimated orientation `X: ..., Y: ..., Z: ... [deg]` to the UART
+console at **115200 baud**, rounded to whole degrees. X is roll, Y is pitch,
+and Z is yaw. Keep the sensor still at startup: tilt initializes from gravity
+and yaw starts at zero. The quaternion estimator uses gyro integration and
+gravity correction; it does not calibrate gyro bias. Yaw drifts without a
+compass, and sustained linear acceleration can disturb tilt. Pitch is within
+[-90, 90] degrees; roll/yaw wrap at +/-180 and Euler angles have gimbal lock
+at vertical pitch. Long read/debugger gaps are skipped rather than integrated.
+Connect Pico GP0 (TX) to the Debug Probe U port RX and connect GND.
+The thread uses priority 7 and a 2048-byte stack. Failed reads retry after
+one second; an unavailable sensor at boot requires checking wiring and rebooting.
+
 `lib/mpu6050` wraps Zephyr's MPU6050 driver. Include `mpu6050.h` and call
 `app_mpu6050_init()` to check readiness, then `app_mpu6050_read()` from a thread.
 Zephyr performs hardware initialization at boot. Reads are serialized by a
@@ -50,6 +63,18 @@ sensor to verify error handling; reconnect and reboot if boot initialization
 failed. These physical checks require a connected MPU6050.
 
 ## Rotating acceleration and angular velocity
+
+The motion thread applies the mounting angles in `MOTION_ROTATION_DEGREES`
+in `src/main.c` before estimating orientation. Set its entries to X, Y, Z
+angles in degrees; `{0.0f, 0.0f, 90.0f}` maps sensor +X to output +Y.
+The default `{0.0f, 0.0f, 0.0f}` preserves the original axes.
+Rebuild and flash after changing angles.
+
+For direct MPU6050 samples, include `mpu6050_rotation.h` and call
+`mpu6050_rotation_apply(&rotation, &sample, &sample)` after a successful
+read. Prepare `rotation` with `imu_rotation_init()` using radians as below.
+The adapter preserves temperature and SI units, supports in-place conversion,
+and leaves output unchanged on failure.
 
 `lib/imu_rotation` is a separate, hardware-independent C library. It rotates
 both XYZ vectors by known angles, preserving units and vector lengths (within
@@ -154,8 +179,17 @@ Failed connections are retried every 10 seconds; disconnections trigger reconnec
 An empty SSID disables connection attempts. Credentials are embedded in firmware;
 keep real passwords out of source control. Passwords are never logged.
 
-For a new Zephyr workspace, run `west blobs fetch hal_infineon` once to obtain
-the CYW43439 firmware. The `/w` board supplies the Wi-Fi devicetree and driver;
+For a new Zephyr workspace, run the following once to obtain the CYW43439
+Wi-Fi firmware and CLM data (the same filter is used in CI):
+
+```text
+west blobs fetch hal_infineon --allow-regex '^img/whd/resources/(firmware|clm)/COMPONENT_43439/'
+```
+
+This excludes unrelated chips and flash loaders, including the PSE84 loader,
+whose upstream download can fail checksum validation. Checksum verification
+remains enabled for all selected blobs.
+The `/w` board supplies the Wi-Fi devicetree and driver;
 no application overlay is needed. Set `CONFIG_WHD_WIFI_COUNTRY` in `prj.conf`
 to the appropriate driver country constant for your deployment if needed.
 
